@@ -1,129 +1,153 @@
-# 🏀 GuardianAI — NBA Injury Risk & Load Management
+# 🏀 GuardianAI — NBA Injury Risk Prediction & Workload Management
 
-> **AQX Sports Analytics Hackathon 2026**  
-> *Protect your roster, not just track it.*
-
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](YOUR_STREAMLIT_URL_HERE)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue)](https://python.org)
-[![XGBoost](https://img.shields.io/badge/model-XGBoost-orange)](https://xgboost.ai)
-[![SHAP](https://img.shields.io/badge/explainability-SHAP-green)](https://shap.readthedocs.io)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+GuardianAI is a predictive analytics system designed for professional basketball teams to forecast player injury risks and manage workloads using explainable AI. By pairing the gold-standard sports science metric—the **Acute:Chronic Workload Ratio (ACWR)**—with Gradient Boosted Trees (XGBoost) and SHAP-based feature attribution, GuardianAI helps coaches and training staff make transparent, data-driven decisions on when to rest players.
 
 ---
 
-## 🎯 The Problem
+## 🎯 The Core Concept: Acute-to-Chronic Workload Ratio (ACWR)
 
-NBA teams lose **tens of millions of dollars annually** to preventable soft-tissue injuries. Most load-management decisions are still based on gut feel or generic "days rest" rules. **GuardianAI changes that.**
+Injury forecasting in professional sports relies heavily on tracking fatigue. The **Acute:Chronic Workload Ratio (ACWR)** is widely regarded as a key indicator of soft-tissue injury risk by sports scientists. It compares a player's short-term physical exertion against their historical baseline:
 
-## 💡 The Solution
+$$ACWR = \frac{\text{Acute Workload (7-day rolling average minutes)}}{\text{Chronic Workload (28-day rolling average minutes)}}$$
 
-GuardianAI predicts whether a player is at elevated injury risk **before each game** — giving coaches a plain-English recommendation backed by the exact workload metrics driving that call.
+The ratio identifies four distinct physiological states:
+* **Under-trained ($ACWR < 0.8$)**: The player is not conditioned well enough, increasing risk during high-intensity games.
+* **Sweet Spot ($0.8 \le ACWR \le 1.3$)**: Optimal workload and conditioning; injury risk is minimized.
+* **Caution Zone ($1.3 < ACWR \le 1.5$)**: Workload is spiking. Caution is recommended.
+* **Danger Zone ($ACWR > 1.5$)**: The player's workload has exceeded safe capacity. Soft-tissue injury risk increases significantly.
 
-## 🔑 Features
+---
 
-| | Feature | Description |
-|--|---------|-------------|
-| 🃏 | **Risk Cards** | Per-player injury probability with top 3 SHAP factors |
-| 📈 | **Team Workload Map** | ACWR scatter plot with danger-zone overlay |
-| 🧠 | **SHAP Explainability** | Which features drive each prediction, and by how much |
-| 📐 | **Model Validation** | AUC, precision, recall — with temporal split proof |
+## 🛠️ Built With
 
-## 🏋️ Core Analytics: ACWR
+GuardianAI is built entirely with production-grade Python tools and web technologies:
 
-The **Acute:Chronic Workload Ratio** is the gold standard in sports science for injury prediction:
+* **Language**: Python 3.11 (optimized with a pinned environment for Streamlit deployment)
+* **Data Retrieval**: `nba_api` (the official client wrapper for NBA.com Stats endpoints)
+* **Data Pipelines & Manipulation**: `pandas` and `numpy`
+* **Machine Learning**: `xgboost` (extreme gradient boosting framework) and `scikit-learn` (pipeline utilities, data splits, and scoring)
+* **Class Balancing**: `imbalanced-learn` (implementing SMOTE to address dataset sparsity)
+* **Model Interpretability (XAI)**: `shap` (SHAP TreeExplainer for game-by-game feature attribution)
+* **Visualization**: `plotly` (interactive team scatter maps and feature curves)
+* **Web Interface**: `streamlit` (interactive, reactive dashboard application)
+* **Deployment Platform**: Streamlit Community Cloud
 
-```
-ACWR = (7-day avg minutes) ÷ (28-day avg minutes)
-```
+---
 
-| ACWR | Zone | Risk Level |
-|------|------|-----------|
-| < 0.8 | Under-trained | Moderate ↑ |
-| 0.8 – 1.3 | ✅ Sweet Spot | Low |
-| 1.3 – 1.5 | ⚠️ Caution | Elevated |
-| **> 1.5** | **🔴 Danger Zone** | **High** |
+## 📐 Machine Learning Pipeline & Methodology
 
-*Source: Hulin et al. (2016), British Journal of Sports Medicine*
+### 1. Feature Engineering
+We construct 18 distinct features across three main categories:
+* **Workload Metrics**: Rolling minute averages (7-day and 28-day windows) and the raw ACWR score.
+* **Schedule & Fatigue**: Recovery days (`days_rest`), density metrics (number of games played in the last 30 days), back-to-back flags, and a composite `fatigue_score` combining ACWR with scheduling density.
+* **Contextual Performance**: Efficiency metrics (points per minute), matchup location (home/away flags), and game number in the current season.
 
-## 🛠️ Tech Stack
+### 2. Strict Temporal Splitting
+In time-series sports data, standard random train-test splits lead to critical data leakage. Shuffling games allows future performance to inform past predictions. To prevent this:
+* **Training Set**: Game logs from the 2018–19 to 2021–22 NBA seasons.
+* **Testing Set**: Game logs from the 2022–23 and 2023–24 NBA seasons.
 
-```
-Python 3.10+
-pandas · numpy            — Data processing
-nba_api                   — Live NBA game logs (2018–2024)
-scikit-learn              — ML pipeline utilities
-imbalanced-learn          — SMOTE for class imbalance
-xgboost                   — Gradient boosted tree classifier
-shap                      — Shapley value explainability
-streamlit · plotly        — Interactive dashboard
-```
+### 3. Resolving Severe Class Imbalance
+Injuries are rare events, appearing in only $\approx 4.5\%$ of our historical player-game entries.
+* **Target Label Proxy**: An injury event is flagged if a player experiences a gap of $8+$ consecutive days between consecutive games (used to represent game-terminating soft-tissue injuries or forced rest).
+* **Treatment**: We apply **SMOTE** (Synthetic Minority Over-sampling Technique) on the training set to construct synthetic minority samples. We back this up with XGBoost's `scale_pos_weight` parameter to ensure the model penalizes missed injury flags heavily.
 
-## 🚀 Run Locally
+### 4. Decision Threshold Calibration
+Because missing a real injury (False Negative) is far more costly to an NBA franchise than resting a player unnecessarily (False Positive), we tune the classification threshold to **$0.15$** to prioritize recall.
 
-```bash
-git clone https://github.com/YOUR_USERNAME/guardianai
-cd guardianai
-pip install -r requirements.txt
+---
 
-# Step 1 — Download NBA game logs (~15 min, API rate-limited)
-python src/data/download.py
+## 📈 Model Validation & Performance
 
-# Step 2 — Engineer ACWR + rolling features
-python src/data/features.py
+The pipeline generates the following metrics on the out-of-sample temporal test set:
 
-# Step 3 — Train XGBoost model (~5 min)
-python src/model/train.py
+* **ROC-AUC**: `0.5867` (demonstrating predictive signal significantly above random chance in a highly volatile domain)
+* **Average Precision (PR-AUC)**: `0.0633`
+* **Test Injury Rate**: `4.53%`
+* **Recall**: `0.2447` (the model successfully flags approximately a quarter of all incoming high-risk injury events)
+* **Decision Threshold**: `0.15`
 
-# Step 4 — Launch dashboard
-streamlit run src/dashboard/app.py
-# Opens at http://localhost:8501
-```
+---
 
-## 🧠 Model Design
+## 📂 Project Structure
 
-### Temporal Split (no data leakage)
-Train on 2018–2022 seasons, test on 2022–2024. Random splits let future games inform past predictions — that's leakage. We simulate real deployment conditions.
-
-### Class Imbalance (SMOTE + scale_pos_weight)
-Injuries occur in ~5–8% of games. Without correction, the model learns to predict "never injured" and achieves 95% accuracy while being useless. SMOTE oversamples the minority class; XGBoost's `scale_pos_weight` reinforces this.
-
-### SHAP Explainability
-A risk score without a reason isn't actionable. SHAP tells coaches: *"Player X is flagged because his 7-day workload spiked 40% above his 28-day baseline."* That's a decision, not just a number.
-
-## 📊 Dataset
-
-- **Source:** `nba_api` (official NBA Stats API Python wrapper)
-- **Players:** 20 high-minutes players across 6 seasons (2018–2024)
-- **Features:** 14 engineered (ACWR, rolling load metrics, schedule density, fatigue score)
-- **Target:** Proxy injury label — player missed 8+ days after a game
-
-## 📁 Project Structure
-
-```
+```directory
 guardianai/
+├── .streamlit/
+│   └── config.toml       # Dark mode theme and UI configuration
 ├── src/
 │   ├── data/
-│   │   ├── download.py      # NBA API data acquisition
-│   │   └── features.py      # ACWR + rolling feature engineering
+│   │   ├── download.py   # Raw data ingestion from the NBA Stats API
+│   │   └── features.py   # Rolling workload calculations and ACWR feature engineering
 │   ├── model/
-│   │   ├── train.py         # XGBoost training pipeline
-│   │   └── explain.py       # SHAP prediction API
+│   │   ├── train.py      # XGBoost model training and SHAP calibration pipeline
+│   │   └── explain.py    # Predictor interface for SHAP explanations
 │   └── dashboard/
-│       ├── app.py           # Main Streamlit application
-│       └── components.py    # Reusable UI components
+│       ├── app.py        # Streamlit dashboard layout and controller
+│       └── components.py # Reusable custom visualization modules
 ├── data/
-│   ├── raw/                 # Downloaded CSVs (gitignored)
-│   └── processed/           # ML-ready dataset
-├── models/                  # Trained model artifacts
-├── .streamlit/config.toml   # Dark theme config
-└── requirements.txt
+│   ├── raw/              # Raw data CSV storage (gitignored)
+│   └── processed/        # Processed and engineered ML-ready dataset
+├── models/
+│   ├── xgb_injury_model.pkl   # Serialized XGBoost model binary
+│   ├── shap_explainer.pkl     # Pre-calculated SHAP TreeExplainer object
+│   ├── feature_cols.json      # Mapping of feature order used during training
+│   ├── model_metrics.json     # Saved evaluation metrics
+│   └── shap_importance.csv    # Overall global feature importance ranks
+├── .python-version       # Pinned environment version (3.11)
+├── requirements.txt      # Dependency manifest
+└── README.md
 ```
 
-## 🏆 Hackathon
+---
 
-**Event:** AQX Sports Analytics Hackathon 2026  
-**Category:** Web Application + Predictive Model  
-**Impact:** Prevents injuries before they happen — gives coaches a data-driven "who to rest" decision before every game.
+## 🚀 Installation & Local Execution
+
+Follow these steps to run the data pipeline, train the model, and launch the interactive dashboard locally.
+
+### 1. Setup Environment
+```bash
+# Clone the repository
+git clone https://github.com/aun009/Hackthon-1.git
+cd Hackthon-1
+
+# Create and activate a virtual environment
+python3.11 -m venv venv
+source venv/bin/activate
+
+# Install required dependencies
+pip install -r requirements.txt
+```
+
+### 2. Execute Data Pipeline & Ingestion
+```bash
+# Fetch raw player statistics from the NBA API (takes ~10-15 mins due to rate-limiting)
+python src/data/download.py
+
+# Run rolling workload calculations and feature engineering
+python src/data/features.py
+```
+
+### 3. Model Training & Diagnostics
+```bash
+# Train the XGBoost model, evaluate metrics, and serialize artifacts
+python src/model/train.py
+```
+
+### 4. Run the Streamlit Dashboard
+```bash
+# Launch the local dashboard
+streamlit run src/dashboard/app.py
+```
+The application will open automatically in your browser at `http://localhost:8501`.
+
+---
+
+## 🃏 Dashboard Features
+
+* **Risk Cards**: Select any individual player to view their computed risk probability. Includes a detailed panel showing the top 3 contributing factors to their risk score generated dynamically via local SHAP attribution.
+* **Workload Map**: Shows a team-wide overview plotting players along the ACWR scale. Highlights players currently entering the Caution and Danger zones.
+* **Model Validation Tab**: Live performance metrics displaying ROC-AUC, Recall, and the Precision-Recall curves. Allows coaches to see the transparency and reliability of the model.
 
 ---
 
