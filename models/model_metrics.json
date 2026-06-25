@@ -1,0 +1,20 @@
+{
+  "roc_auc": 0.5867,
+  "avg_precision": 0.0633,
+  "precision": 0.074,
+  "recall": 0.2447,
+  "f1": 0.1136,
+  "threshold": 0.15,
+  "test_injury_rate": 0.0453,
+  "train_seasons": [
+    "2018-19",
+    "2019-20",
+    "2020-21",
+    "2021-22"
+  ],
+  "test_seasons": [
+    "2022-23",
+    "2023-24"
+  ],
+  "feature_count": 18
+}

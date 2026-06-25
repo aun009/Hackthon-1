@@ -1,0 +1,20 @@
+[
+  "rolling_min_7",
+  "rolling_min_28",
+  "acwr",
+  "rolling_pts_7",
+  "rolling_reb_7",
+  "rolling_ast_7",
+  "days_rest",
+  "back_to_back",
+  "no_rest_2d",
+  "games_played_30",
+  "fatigue_score",
+  "game_num_in_season",
+  "pts_per_min",
+  "is_away",
+  "high_load_flag",
+  "load_spike",
+  "dense_schedule",
+  "min_trend"
+]
